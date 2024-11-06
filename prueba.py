@@ -1,167 +1,159 @@
 import streamlit as st
-import pulp
-import graphviz
-import time
-from typing import Tuple, Dict
-import pandas as pd
+from pulp import LpMaximize, LpMinimize, LpProblem, LpVariable, lpSum, PULP_CBC_CMD
 
-def resolver_optimizacion(tipo_problema: str = 'Entero', tolerancia: float = 0.1) -> Tuple[pulp.LpProblem, Dict, float]:
-    # Registrar tiempo inicial
-    tiempo_inicio = time.time()
-    
-    # Crear el modelo
-    prob = pulp.LpProblem("Ejercicio_8_1_2", pulp.LpMaximize)
-    
-    # Definir variables según el tipo de problema
-    if tipo_problema == 'Entero':
-        x1 = pulp.LpVariable("x1", lowBound=0, cat='Integer')
-        x2 = pulp.LpVariable("x2", lowBound=0, cat='Integer')
-        x3 = pulp.LpVariable("x3", lowBound=0, cat='Integer')
-    else:  # Relajación LP
-        x1 = pulp.LpVariable("x1", lowBound=0)
-        x2 = pulp.LpVariable("x2", lowBound=0)
-        x3 = pulp.LpVariable("x3", lowBound=0)
-    
-    # Definir función objetivo
-    prob += 4*x1 + 3*x2 + 3*x3
-    
-    # Definir restricciones
-    prob += 4*x1 + 2*x2 + x3 <= 10, "Restricción 1"
-    prob += 3*x1 + 4*x2 + 2*x3 <= 14, "Restricción 2"
-    prob += x1 + 3*x2 + 3*x3 <= 7, "Restricción 3"
-    
-    # Configurar tolerancia del solver si se especifica
-    if tolerancia != 0.1:
-        prob.solver = pulp.PULP_CBC_CMD(mip_rel_gap=tolerancia/100)
-    
-    # Resolver el problema
-    prob.solve()
-    
-    # Calcular tiempo de solución
-    tiempo_solucion = time.time() - tiempo_inicio
-    
-    # Recopilar resultados
-    resultados = {
-        'x1': pulp.value(x1),
-        'x2': pulp.value(x2),
-        'x3': pulp.value(x3),
-        'objetivo': pulp.value(prob.objective),
-        'estado': pulp.LpStatus[prob.status]
-    }
-    
-    return prob, resultados, tiempo_solucion
+# Configuración de la aplicación
+st.title("Ejercicios de Optimización en Investigación de Operaciones")
 
-def crear_arbol_decision():
-    dot = graphviz.Digraph()
-    dot.attr(rankdir='TB')
-    
-    # Agregar nodos
-    dot.node('A', 'Raíz\nRamificación en x₁')
-    dot.node('B', 'x₁ ≤ 2')
-    dot.node('C', 'x₁ > 2')
-    dot.node('D', 'Ramificación en x₂')
-    dot.node('E', 'No Factible')
-    dot.node('F', 'Solución Encontrada\nx₁=2, x₂=1, x₃=0')
-    
-    # Agregar conexiones
-    dot.edge('A', 'B', 'rama izquierda')
-    dot.edge('A', 'C', 'rama derecha')
-    dot.edge('B', 'D')
-    dot.edge('C', 'E')
-    dot.edge('D', 'F')
-    
-    return dot
+# Selección de ejercicio
+exercise = st.sidebar.selectbox(
+    "Selecciona el ejercicio para resolver",
+    [
+        "Ejercicio 8.1 (Branch and Bound)", 
+        "Ejercicio 8.2 (LP y IP)", 
+        "Ejercicio 8.3 (Cut-Planes)", 
+        "Ejercicio 8.4 (Gomory Cut-Planes)", 
+        "Ejercicio 8.5 (Selección de Proyectos con Programación Entera Binaria)"
+    ]
+)
 
-def main():
-    st.title("Ejercicios 8.1 y 8.2 - Solucionador| PLM")
-    
-    st.markdown("""
-    ### Formulación del Problema:
-    Maximizar P(x₁, x₂, x₃) = 4x₁ + 3x₂ + 3x₃
-    
-    Sujeto a:
-    - 4x₁ + 2x₂ + x₃ ≤ 10
-    - 3x₁ + 4x₂ + 2x₃ ≤ 14
-    - x₁ + 3x₂ + 3x₃ ≤ 7
-    
-    Donde x₁, x₂, x₃ son enteros no negativos
-    """)
-    
-    st.header("Ejercicio 8.1 - Programación Lineal Entera")
-    if st.button("Resolver PLM"):
-        prob, resultados, tiempo_plm = resolver_optimizacion('Entero')
-        
-        st.write("### Resultados:")
-        st.write(f"Estado: {resultados['estado']}")
-        st.write(f"x₁ = {resultados['x1']:.4f}")
-        st.write(f"x₂ = {resultados['x2']:.4f}")
-        st.write(f"x₃ = {resultados['x3']:.4f}")
-        st.write(f"Valor Objetivo = {resultados['objetivo']:.4f}")
-        st.write(f"Tiempo de Solución: {tiempo_plm:.4f} segundos")
-        
-        st.write("### Árbol de Decisión")
-        dot = crear_arbol_decision()
-        st.graphviz_chart(dot)
-    
-    st.header("Ejercicio 8.2 - Análisis Comparativo")
-    
-    if st.button("Ejecutar Análisis Comparativo"):
-        # Lista para almacenar resultados
-        lista_resultados = []
-        
-        # 1. Resolver como relajación LP
-        _, resultados_lp, tiempo_lp = resolver_optimizacion('LP')
-        lista_resultados.append({
-            'Tipo': 'Relajación LP',
-            'Tiempo': tiempo_lp,
-            'Objetivo': resultados_lp['objetivo'],
-            'x₁': resultados_lp['x1'],
-            'x₂': resultados_lp['x2'],
-            'x₃': resultados_lp['x3']
-        })
-        
-        # 2. Resolver como PLM con tolerancia predeterminada
-        _, resultados_plm, tiempo_plm = resolver_optimizacion('Entero')
-        lista_resultados.append({
-            'Tipo': 'PLM (tolerancia 0.1%)',
-            'Tiempo': tiempo_plm,
-            'Objetivo': resultados_plm['objetivo'],
-            'x₁': resultados_plm['x1'],
-            'x₂': resultados_plm['x2'],
-            'x₃': resultados_plm['x3']
-        })
-        
-        # 3. Resolver como PLM con tolerancia más ajustada
-        _, resultados_ajustados, tiempo_ajustado = resolver_optimizacion('Entero', tolerancia=0.01)
-        lista_resultados.append({
-            'Tipo': 'PLM (tolerancia 0.01%)',
-            'Tiempo': tiempo_ajustado,
-            'Objetivo': resultados_ajustados['objetivo'],
-            'x₁': resultados_ajustados['x1'],
-            'x₂': resultados_ajustados['x2'],
-            'x₃': resultados_ajustados['x3']
-        })
-        
-        # Crear tabla comparativa
-        df = pd.DataFrame(lista_resultados)
-        st.write("### Resultados Comparativos:")
-        st.dataframe(df)
-        
-        # Análisis
-        st.write("### Análisis:")
-        st.write("""
-        1. Relajación LP vs Solución Entera:
-           - La relajación LP proporciona una cota superior de la solución entera óptima
-           - Típicamente se resuelve más rápido pero puede dar valores no enteros
-           
-        2. Impacto de la Tolerancia:
-           - Una tolerancia más ajustada (0.01%) puede aumentar el tiempo de solución
-           - Puede proporcionar soluciones ligeramente diferentes en algunos casos
-           
-        3. Comparación de Tiempos Computacionales:
-           - La relajación LP es típicamente la más rápida
-           - Una tolerancia más ajustada generalmente aumenta el tiempo de solución
-        """)
+# Función para mostrar los resultados
+def mostrar_resultados(prob, variables):
+    result = prob.solve(PULP_CBC_CMD(msg=False))
+    st.subheader("Resultados")
+    if result == 1:
+        st.write("Valor óptimo de la función objetivo (Z):", prob.objective.value())
+        for var in variables:
+            st.write(f"{var.name} = {var.value()}")
+    else:
+        st.error("No se encontró una solución óptima.")
 
-if __name__ == "__main__":
-    main()
+# Ejercicio 8.1 - Branch and Bound
+if exercise == "Ejercicio 8.1 (Branch and Bound)":
+    st.header("Ejercicio 8.1 - Branch and Bound")
+    prob = LpProblem("Ejercicio_8_1", LpMaximize)
+    
+    # Variables
+    x1 = LpVariable("x1", lowBound=0, cat="Integer")
+    x2 = LpVariable("x2", lowBound=0, cat="Integer")
+    x3 = LpVariable("x3", lowBound=0, cat="Integer")
+    
+    # Función objetivo
+    prob += 4 * x1 + 3 * x2 + 1 * x3, "Z"
+    
+    # Restricciones
+    prob += 4 * x1 + 2 * x2 + x3 <= 10, "Restriccion_1"
+    prob += 3 * x1 + 4 * x2 + 2 * x3 <= 14, "Restriccion_2"
+    prob += 2 * x1 + x2 + 3 * x3 <= 7, "Restriccion_3"
+    
+    # Mostrar resultados
+    mostrar_resultados(prob, [x1, x2, x3])
+
+# Ejercicio 8.2 - Resolución LP y IP
+elif exercise == "Ejercicio 8.2 (LP y IP)":
+    st.header("Ejercicio 8.2 - Resolución LP y IP")
+    prob = LpProblem("Ejercicio_8_2", LpMaximize)
+    
+    # Variables
+    x1 = LpVariable("x1", lowBound=0)
+    x2 = LpVariable("x2", lowBound=0)
+    x3 = LpVariable("x3", lowBound=0)
+    
+    # Función objetivo
+    prob += 4 * x1 + 3 * x2 + 1 * x3, "Z"
+    
+    # Restricciones
+    prob += 4 * x1 + 2 * x2 + x3 <= 10, "Restriccion_1"
+    prob += 3 * x1 + 4 * x2 + 2 * x3 <= 14, "Restriccion_2"
+    prob += 2 * x1 + x2 + 3 * x3 <= 7, "Restriccion_3"
+    
+    # Resolución como LP
+    st.subheader("Resolución como Problema Lineal (LP)")
+    mostrar_resultados(prob, [x1, x2, x3])
+    
+    # Resolución como IP
+    st.subheader("Resolución como Problema Entero (IP)")
+    x1.cat = "Integer"
+    x2.cat = "Integer"
+    x3.cat = "Integer"
+    mostrar_resultados(prob, [x1, x2, x3])
+
+# Ejercicio 8.3 - Cut-Planes
+elif exercise == "Ejercicio 8.3 (Cut-Planes)":
+    st.header("Ejercicio 8.3 - Cut-Planes")
+    prob = LpProblem("Ejercicio_8_3", LpMinimize)
+    
+    # Variables
+    x = LpVariable("x", lowBound=0, cat="Integer")
+    y = LpVariable("y", lowBound=0, cat="Integer")
+    
+    # Función objetivo
+    prob += x - y, "C"
+    
+    # Restricciones
+    prob += 3 * x + 4 * y <= 6, "Restriccion_1"
+    prob += x - y <= 1, "Restriccion_2"
+    
+    # Mostrar resultados
+    mostrar_resultados(prob, [x, y])
+    st.info("Para implementar el método de corte iterativo Cut-Planes, se debe añadir un ciclo de cortes de Gomory, creando restricciones adicionales en cada iteración hasta encontrar una solución entera.")
+
+# Ejercicio 8.4 - Gomory Cut-Planes
+elif exercise == "Ejercicio 8.4 (Gomory Cut-Planes)":
+    st.header("Ejercicio 8.4 - Gomory Cut-Planes")
+    prob = LpProblem("Ejercicio_8_4", LpMaximize)
+    
+    # Variables
+    x1 = LpVariable("x1", lowBound=0, cat="Integer")
+    x2 = LpVariable("x2", lowBound=0, cat="Integer")
+    x3 = LpVariable("x3", lowBound=0, cat="Integer")
+    
+    # Función objetivo
+    prob += 4 * x1 + 3 * x2 + 1 * x3, "Z"
+    
+    # Restricciones
+    prob += 4 * x1 + 2 * x2 + x3 <= 10, "Restriccion_1"
+    prob += 3 * x1 + 4 * x2 + 2 * x3 <= 14, "Restriccion_2"
+    prob += 2 * x1 + x2 + 3 * x3 <= 7, "Restriccion_3"
+    
+    # Mostrar resultados iniciales
+    mostrar_resultados(prob, [x1, x2, x3])
+    st.info("Para aplicar el método de cortes de Gomory, sería necesario agregar una serie de cortes iterativos hasta que todas las variables sean enteras.")
+
+# Ejercicio 8.5 - Selección de Proyectos con Programación Entera Binaria
+elif exercise == "Ejercicio 8.5 (Selección de Proyectos con Programación Entera Binaria)":
+    st.header("Ejercicio 8.5 - Selección de Proyectos con Programación Entera Binaria")
+    prob = LpProblem("Ejercicio_8_5", LpMaximize)
+    
+    # Datos de NPV y costos por año
+    npv = [141, 187, 121, 83, 262, 127]
+    year1_costs = [75, 90, 60, 30, 100, 50]
+    year2_costs = [25, 25, 15, 10, 25, 20]
+    year3_costs = [20, 30, 15, 5, 20, 20]
+    year4_costs = [15, 10, 15, 5, 20, 10]
+    year5_costs = [10, 5, 5, 5, 10, 5]
+    budget_year1 = 75
+    budget_year2_5 = 250
+    
+    # Variables binarias
+    x = [LpVariable(f"x{i}", cat="Binary") for i in range(6)]
+    
+    # Función objetivo
+    prob += lpSum(npv[i] * x[i] for i in range(6)), "Total_NPV"
+    
+    # Restricciones de presupuesto
+    prob += lpSum(year1_costs[i] * x[i] for i in range(6)) <= budget_year1, "Budget_Year_1"
+    prob += lpSum(year2_costs[i] * x[i] for i in range(6)) <= budget_year2_5, "Budget_Year_2"
+    prob += lpSum(year3_costs[i] * x[i] for i in range(6)) <= budget_year2_5, "Budget_Year_3"
+    prob += lpSum(year4_costs[i] * x[i] for i in range(6)) <= budget_year2_5, "Budget_Year_4"
+    prob += lpSum(year5_costs[i] * x[i] for i in range(6)) <= budget_year2_5, "Budget_Year_5"
+    
+    # Mostrar resultados
+    result = prob.solve(PULP_CBC_CMD(msg=False))
+    st.subheader("Resultados")
+    if result == 1:
+        st.write("Valor óptimo de la función objetivo (NPV total):", prob.objective.value())
+        st.write("Proyectos seleccionados:")
+        for i in range(6):
+            st.write(f"Proyecto {i + 1}: {'Seleccionado' if x[i].value() == 1 else 'No seleccionado'}")
+    else:
+        st.error("No se encontró una solución óptima.")
